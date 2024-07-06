@@ -1,0 +1,19 @@
+base:
+  project: breast_classified
+  pkg_list_fname: pkg_list.txt
+  random_state: 0
+
+data_load:
+  SLIDE_DIR: data
+  TRAIN_CSV_PATH: data_label/breast.csv
+  SLIDE_FILE_EXTENSION: ".svs"
+  INPUT_SIZE: [21500, 21500, 3]
+  RESIZE_RATIO: 0.2
+  SLIDE_READER: "openslide"
+  DEBUG_PATH: 
+  NUM_CLASSES: 3
+  BATCH_SIZE: 1
+  X_Y_Batch_Path: datapre
+  data_dir: data
+  orig_dirname: Magnetic-tile-defect-datasets.-master
+  new_dirname: MAGNETIC_TILE_SURFACE_DEFECTS

@@ -1,0 +1,9 @@
+dvc[s3]
+tensorflow[and-cuda]
+opencv-python
+openslide-python
+imgaug
+pillow
+python-box
+dvclive>=1.0
+joblib

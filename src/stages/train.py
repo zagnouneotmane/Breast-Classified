@@ -40,14 +40,7 @@ def data_load(params):
                 snapshot_path=snapshot_path
             )
     return dataloader
-def getitem__(dataloader: WholeSlideDataloader):
-    x_y_batch_path=Path(params.data_load.X_Y_Batch_Path)
-    x_y_batch_path.mkdir(exist_ok=True)
-    
-    x_batch, y_batch = dataloader.__getitem__(1)
 
-    joblib.dump(x_batch,x_y_batch_path/'x_batch.joblib')
-    joblib.dump(y_batch,x_y_batch_path/'y_batch.joblib')
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser()
@@ -56,6 +49,4 @@ if __name__ == '__main__':
     params_path = args.config
     params = load_params(params_path)
     dataload = data_load(params)
-    getitem__(dataloader=dataload)
-
     

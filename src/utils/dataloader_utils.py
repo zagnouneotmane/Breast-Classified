@@ -6,7 +6,6 @@ from PIL import Image, ImageOps
 import tensorflow as tf
 import time
 import traceback
-import joblib
 
 def preprocess_input(img):
     return (np.array(img).astype(np.float32) - 127.5) / 127.5
@@ -26,7 +25,6 @@ class WholeSlideDataloader(tf.keras.utils.Sequence):
         num_classes,
         batch_size=1,
         snapshot_path=None,
-        x_y_batch_path=None,
     ):
         self.dataset = dataset
         self.augment = augment
@@ -34,7 +32,6 @@ class WholeSlideDataloader(tf.keras.utils.Sequence):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.snapshot_path = snapshot_path
-        self.x_y_batch_path = x_y_batch_path
 
         self._reinit_shuffle_list()
 
@@ -89,8 +86,6 @@ class WholeSlideDataloader(tf.keras.utils.Sequence):
             
             x_batch.append(img)
             y_batch.append(y)
-            joblib.dump(np.array(x_batch),self.x_y_batch_path/'x_batch.joblib')
-            joblib.dump(np.array(y_batch), self.x_y_batch_path/'y_batch.joblib')
 
         return np.array(x_batch), np.array(y_batch)
 
@@ -112,4 +107,176 @@ class WholeSlideDataloader(tf.keras.utils.Sequence):
         self.shuffle_list = np.arange(len(self.dataset))
         if self.shuffle:
             np.random.shuffle(self.shuffle_list)
+
+
+
+class MILDataloader(WholeSlideDataloader):
+    MIL_WHITE_THRESHOLD = 220
+    MIL_EM_GAUSSIAN_KERNEL_SIZE = 3
+    MIL_EM_P1 = 0.1
+    MIL_EM_P2 = 0.05
+
+    def __init__(
+        self, 
+        dataset,
+        augment,
+        shuffle,
+        num_classes,
+        mil_model,
+        batch_size=1,
+        snapshot_path=None,
+        mil_patch_size=[224, 224],
+        mil_infer_batch_size=32,
+        mil_use_em=False,
+        mil_k=1,
+        mil_skip_white=True,
+    ):
+        super(MILDataloader, self).__init__(
+            dataset=dataset,
+            augment=augment,
+            shuffle=shuffle,
+            num_classes=num_classes,
+            batch_size=batch_size,
+            snapshot_path=snapshot_path
+        )
+        self.mil_model = mil_model
+        self.mil_patch_size = mil_patch_size
+        self.mil_infer_batch_size = mil_infer_batch_size
+        self.mil_use_em = mil_use_em
+        self.mil_k = mil_k
+        self.mil_skip_white = mil_skip_white
+            
+    def __getitem__(self, idx):
+        x_batch_wsi, y_batch_wsi = super(MILDataloader, self).__getitem__(idx)
+
+        x_batch = []
+        y_batch = []
+        for i in range(self.batch_size):
+            x = x_batch_wsi[i]
+            y = y_batch_wsi[i]
+
+            num_patch_y = x.shape[0] // self.mil_patch_size[1]
+            num_patch_x = x.shape[1] // self.mil_patch_size[0]
+
+            mil_infer_dataset = []
+            coords = []
+            for i in range(num_patch_y):
+                for j in range(num_patch_x):
+                    sliced_x = x[
+                        i * self.mil_patch_size[1]: (i + 1) * self.mil_patch_size[1],
+                        j * self.mil_patch_size[0]: (j + 1) * self.mil_patch_size[0],
+                        :,
+                    ]
+                    if (
+                        self.mil_skip_white and 
+                        np.min(sliced_x) > preprocess_input(self.MIL_WHITE_THRESHOLD)
+                    ):
+                        continue
+                    mil_infer_dataset.append(sliced_x)
+                    coords.append((j, i))
+            mil_infer_dataset = np.array(mil_infer_dataset)
+
+            mil_infer_res = []
+            for begin_idx in range(0, len(mil_infer_dataset), self.mil_infer_batch_size):
+                end_idx = np.minimum(len(mil_infer_dataset), begin_idx + self.mil_infer_batch_size)
+                mil_infer_res.append(
+                    self.mil_model.predict_on_batch(
+                         mil_infer_dataset[begin_idx: end_idx]
+                    )
+                )
+            mil_infer_res = np.concatenate(mil_infer_res, axis=0)
+            benign_rate = mil_infer_res[:, 0]
+
+            if not self.mil_use_em:
+                top_k_indices = np.argsort(benign_rate)[0: self.mil_k]
+                for index in top_k_indices:
+                    x_batch.append(mil_infer_dataset[index])
+                    y_batch.append(y)
+            else:
+                res_map = np.zeros([num_patch_y, num_patch_x, self.num_classes - 1]) # Excluding non-cancer
+                for i in range(len(mil_infer_res)):
+                    res = mil_infer_res[i]
+                    coord = coords[i]
+                    res_map[coord[1], coord[0], :] = res[1: ]
+
+                res_map_blurred = cv2.GaussianBlur(
+                    res_map, 
+                    (self.MIL_EM_GAUSSIAN_KERNEL_SIZE, self.MIL_EM_GAUSSIAN_KERNEL_SIZE),
+                    0
+                )
+
+                mil_infer_res_blurred = []
+                for i in range(len(mil_infer_res)):
+                    coord = coords[i]
+                    res_blurred = res_map_blurred[coord[1], coord[0], :]
+                    mil_infer_res_blurred.append(res_blurred)
+                mil_infer_res_blurred = np.array(mil_infer_res_blurred)
+
+                thres_p1 = np.percentile(mil_infer_res_blurred, 100.0 - self.MIL_EM_P1)
+
+                select = None
+                for class_id in range(1, self.num_classes):
+                    candidates = mil_infer_res_blurred[:, class_id - 1].tolist()
+                    candidates = np.array(candidates)
+
+                    thres_p2 = np.percentile(candidates, 100.0 - self.MIL_EM_P2)
+                    thres = np.minimum(thres_p1, thres_p2)
+
+                    if select is None:
+                        select = mil_infer_res_blurred[:, class_id - 1] > thres
+                    else:
+                        select = np.logical_or(select, mil_infer_res_blurred[:, class_id - 1] > thres)
+
+                no_selected = True
+                for i in range(len(mil_infer_res_blurred)):
+                    is_select = select[i]
+                    if is_select:
+                        x_batch.append(mil_infer_dataset[i])
+                        y_batch.append(y)
+                        no_selected = False
+
+                if no_selected:
+                    x_batch.append(mil_infer_dataset[np.argmin(benign_rate)])
+                    y_batch.append(y)
+
+        x_batch = np.array(x_batch) # The batch dimension is large as (self.batch_size * self.mil_k).
+        y_batch = np.array(y_batch)
+
+        if self.snapshot_path != None:
+            os.makedirs(self.snapshot_path, exist_ok=True)
+            img = inverse_preprocess_input(x_batch[0])
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(
+                os.path.join(self.snapshot_path, "mil_top_patch_snapshot.tiff"),
+                img_bgr,
+            )
+
+        return x_batch, y_batch
         
+def _get_augmentor():
+    augmentation = iaa.Sequential([
+        iaa.Fliplr(0.5, name="FlipLR"),
+        iaa.Flipud(0.5, name="FlipUD"),
+        iaa.Affine(
+            translate_percent=(-0.025, 0.025),
+            rotate=(0, 360),
+            order=3, # Bicubic interpolation
+            cval=255,
+            mode='constant',
+            name='affine',
+        ),
+        iaa.contrast.LinearContrast(alpha=(0.5, 1.5)),
+        iaa.color.MultiplyBrightness(mul=(0.65, 1.35)),
+        iaa.color.AddToHueAndSaturation(value=(-32, 32), per_channel=True),
+    ])    
+    return augmentation
+
+def _get_augmentor_wo_affine():
+    augmentation = iaa.Sequential([
+        iaa.Fliplr(0.5, name="FlipLR"),
+        iaa.Flipud(0.5, name="FlipUD"),
+        iaa.contrast.LinearContrast(alpha=(0.5, 1.5)),
+        iaa.color.MultiplyBrightness(mul=(0.65, 1.35)),
+        iaa.color.AddToHueAndSaturation(value=(-32, 32), per_channel=True),
+    ])    
+    return augmentation

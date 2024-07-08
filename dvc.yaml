@@ -1,0 +1,13 @@
+stages:
+  data_load:
+    cmd: python src/stages/data_load.py --config=params.yaml
+    deps:
+    - src/stages/data_load.py
+    - src/utils/dataset_utils.py
+    - src/utils/dataloader_utils.py
+    params:
+    - base
+    - data_load
+    outs:
+    - datapreprocessed/x_batch.joblib
+    - datapreprocessed/y_batch.joblib

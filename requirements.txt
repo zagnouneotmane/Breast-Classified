@@ -1,7 +1,7 @@
 dvc[s3]
 tensorflow[and-cuda]
 opencv-python
-openslide-python
+
 imgaug
 pillow
 python-box

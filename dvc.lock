@@ -1,0 +1,47 @@
+schema: '2.0'
+stages:
+  data_load:
+    cmd: python src/stages/data_load.py --config=params.yaml
+    deps:
+    - path: src/stages/data_load.py
+      hash: md5
+      md5: 0de7eb199747d0d4a527e51c9c3cfcfd
+      size: 2054
+    - path: src/utils/dataloader_utils.py
+      hash: md5
+      md5: e9b7bc1b44b04aeaea4b45bf2a93738e
+      size: 10074
+    - path: src/utils/dataset_utils.py
+      hash: md5
+      md5: e6d4e53b8c501a1f7928909f85c288ef
+      size: 5464
+    params:
+      params.yaml:
+        base:
+          project: breast_classified
+          pkg_list_fname: pkg_list.txt
+          random_state: 0
+        data_load:
+          SLIDE_DIR: data
+          TRAIN_CSV_PATH: label/breast.csv
+          SLIDE_FILE_EXTENSION: .svs
+          INPUT_SIZE:
+          - 1558
+          - 1558
+          - 3
+          RESIZE_RATIO: 0.2
+          SLIDE_READER: openslide
+          DEBUG_PATH:
+          NUM_CLASSES: 2
+          BATCH_SIZE: 1
+          X_Y_Batch_Path: datapreprocessed
+          data_dir: data
+    outs:
+    - path: datapreprocessed/x_batch.joblib
+      hash: md5
+      md5: dabb8c354646b1a38e02857e035481b6
+      size: 29128609
+    - path: datapreprocessed/y_batch.joblib
+      hash: md5
+      md5: 7046fff0e1b24979fc9b3965500cca86
+      size: 241

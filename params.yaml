@@ -5,15 +5,13 @@ base:
 
 data_load:
   SLIDE_DIR: data
-  TRAIN_CSV_PATH: data_label/breast.csv
-  SLIDE_FILE_EXTENSION: ".svs"
-  INPUT_SIZE: [21500, 21500, 3]
+  TRAIN_CSV_PATH: label/breast.csv
+  SLIDE_FILE_EXTENSION: .svs
+  INPUT_SIZE: [1558, 1558, 3]
   RESIZE_RATIO: 0.2
-  SLIDE_READER: "openslide"
+  SLIDE_READER: openslide
   DEBUG_PATH: 
-  NUM_CLASSES: 3
+  NUM_CLASSES: 2
   BATCH_SIZE: 1
-  X_Y_Batch_Path: datapre
+  X_Y_Batch_Path: datapreprocessed
   data_dir: data
-  orig_dirname: Magnetic-tile-defect-datasets.-master
-  new_dirname: MAGNETIC_TILE_SURFACE_DEFECTS

@@ -16,7 +16,7 @@ class Dataset(object):
         self,
         csv_path,
         slide_dir,
-        slide_file_extension=".ndpi",
+        slide_file_extension=".svs",
         target_size=None,
         resize_ratio=1.0,
         slide_reader="openslide",
@@ -86,10 +86,10 @@ def _read_slide_openslide(
     slide = openslide.open_slide(slide_path)
 
     if "aperio.AppMag" in slide.properties:
-        mag = int(slide.properties["aperio.AppMag"])
-        if mag == 40:
+        mag = int(float(slide.properties["aperio.AppMag"]))
+        if mag >= 40:
             pix_dim = 0.25
-        elif mag == 20:
+        elif mag <= 20:
             pix_dim = 0.5
         else:
             assert False

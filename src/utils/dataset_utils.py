@@ -18,7 +18,7 @@ class Dataset(object):
         slide_dir,
         slide_file_extension=".svs",
         target_size=None,
-        resize_ratio=1.0,
+        resize_ratio=0.2,
         slide_reader="openslide",
         snapshot_path=None,
     ):

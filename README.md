@@ -1,66 +1,140 @@
 # Whole-slide CNN Training Pipeline
 
-### Hardware Requirements
+This guide will help you set up an EC2 instance with TensorFlow GPU support, installing project dependencies, and running your data loading or DVC pipeline for your whole-slide CNN training project.
 
-Make sure the system contains adequate amount of main memory space (minimal: 256 GB, recommended: 512 GB) to prevent out-of-memory error.
-For ones who would like to have a try with less concern about model accuracy, setting a lower resizing ratio and image size in configuration can drastically reduce memory consumption, friendly for limited computing resources.
+## Step 1: Launch an EC2 Instance
 
-### Packages
+1. **Log in to AWS Management Console**:
+   - Navigate to the [AWS Management Console](https://aws.amazon.com/console/).
+   - Sign in with your AWS credentials.
 
-The codes are tested on the environment with Ubuntu 18.04 / CentOS 7.5, Python 3.7.3, cuda 10.0, cudnn 7.6 and Open MPI 4.0.1.
-Some Python packages should be installed before running the scripts, including
+2. **Launch a new EC2 instance**:
+   - Go to the EC2 Dashboard.
+   - Click "Launch Instance."
+   - Choose an Amazon Machine Image (AMI). For TensorFlow with GPU, select an Amazon Deep Learning AMI or a standard Ubuntu AMI.
+   - Choose an instance type. Select a GPU instance type such as `p2.xlarge`, `p3.2xlarge`, or `g4dn.xlarge`.
+   - Configure security group: Add rules to allow SSH (port 22) from your IP address.
+   - Review and launch the instance. Ensure you have a key pair for SSH access.
 
-- Tensorflow v1.x (tensorflow-gpu==1.15.3)
-- Horovod (horovod==0.19.0)
-- MPI for Python (mpi4py==3.0.3)
-- OpenSlide 3.4.1 (https://github.com/openslide/openslide/releases/tag/v3.4.1)
-- OpenSlide Python (openslide-python=1.1.1)
-- Tensorflow Huge Model Support (our package)
+## Step 2: Connect to the EC2 Instance
 
-Refer to requirements.txt for the full list.
-The installation of these packages should take few minutes.
+1. **Obtain the Public DNS of your instance**:
+   - In the EC2 Dashboard, find your running instance and note its Public DNS.
 
-## Usage
+2. **Connect via SSH**:
+   - Open a terminal on your local machine.
+   - Connect using the SSH command: 
+     ```bash
+     ssh -i /path/to/your-key-pair.pem ubuntu@your-instance-public-dns
+     ```
 
-### 1. Define Datasets
+## Step 3: Install NVIDIA Drivers and CUDA Toolkit
 
-To initiate a training task, several CSV files, e.g. train.csv, val.csv and test.csv, should be prepared to define training, validation and testing datasets.
+1. **Update the package lists**:
+   ```bash
+   sudo apt-get update
+   ```
 
-These CSV files should follow the format:
-```
-[slide_name_1],[class_id_1]
-[slide_name_2],[class_id_2]
-...
-```
-, where [slide_name_\*] specify the filename **without extension** of a slide image and [class_id_\*] is an integer indicating a slide-level label (e.g. 0 for normal, 1 for cancerous). 
+2. **Install necessary packages**:
+   ```bash
+   sudo apt-get install -y build-essential
+   ```
 
-The configuration files for our experiments are placed at data_configs/.
+3. **Install NVIDIA drivers**:
+   ```bash
+   wget https://us.download.nvidia.com/XFree86/Linux-x86_64/460.32.03/NVIDIA-Linux-x86_64-460.32.03.run
+   sudo bash NVIDIA-Linux-x86_64-460.32.03.run
+   ```
 
-### 2. Set Up Training Configurations
+4. **Install CUDA Toolkit**:
+   - Download and install CUDA from [NVIDIA's CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
+   ```bash
+   wget https://developer.download.nvidia.com/compute/cuda/11.0.2/local_installers/cuda_11.0.2_450.51.05_linux.run
+   sudo sh cuda_11.0.2_450.51.05_linux.run
+   ```
 
-Model hyper-parameters are set up in a YAML file. 
+5. **Add CUDA to your PATH and LD_LIBRARY_PATH**:
+   ```bash
+   echo 'export PATH=/usr/local/cuda-11.0/bin:$PATH' >> ~/.bashrc
+   echo 'export LD_LIBRARY_PATH=/usr/local/cuda-11.0/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+   source ~/.bashrc
+   ```
 
+## Step 4: Install cuDNN
 
-The following table describes each field in a train_config.
-| Field                      | Description
-| -------------------------- | ---------------------------------------------------------------------------------------------
-| RESULT_DIR                 | Directory to store output stuffs, including model weights, testing results, etc.
-| TRAIN_CSV_PATH             | CSV file defining the training dataset.
-| VAL_CSV_PATH               | CSV file defining the validation dataset.
-| TEST_CSV_PATH              | CSV file defining the testing dataset.
-| SLIDE_DIR                  | Directory containing all the slide image files (can be soft links).
-| SLIDE_FILE_EXTENSION       | File extension. (e.g. ".svs")
-| SLIDE_READER               | Library to read slides. (default: `openslide`)
-| RESIZE_RATIO               | Resize ratio for downsampling slide images.
-| INPUT_SIZE                 | Size of model inputs in [height, width, channels]. Resized images are padded or cropped to the size. Try decreasing this field when main memory are limited.
-| NUM_CLASSES                | Number of classes.
-| BATCH_SIZE                 | Number of slides processed in each training iteration for each MPI worker. (default: 1)
+1. **Download cuDNN**:
+   - Go to the [cuDNN download page](https://developer.nvidia.com/cudnn).
+   - Download the version that matches your CUDA version.
 
-The following fields are valid only when `USE_MIL`.
-| Field                      | Description
-| -------------------------- | ---------------------------------------------------------------------------------------------
-| MIL_PATCH_SIZE             | Patch size of the MIL model in [height, width].
-| MIL_INFER_BATCH_SIZE       | Batch size for MIL finding representative patches.
-| MIL_USE_EM                 | Whether to use EM-MIL.
-| MIL_K                      | Number of representative patches. (default: 1)
-| MIL_SKIP_WHITE             | Whether to skip white patches. (default: `True`)
+2. **Install cuDNN**:
+   ```bash
+   tar -xzvf cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz
+   sudo cp cuda/include/cudnn*.h /usr/local/cuda/include
+   sudo cp cuda/lib64/libcudnn* /usr/local/cuda/lib64
+   sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+   ```
+
+## Step 5: Clone Your Git Repository
+
+1. **Install Git**:
+   ```bash
+   sudo apt-get install -y git
+   ```
+
+2. **Clone your repository**:
+   ```bash
+   git clone https://github.com/git-repository.git
+   cd git-repository
+   ```
+
+## Step 6: Install TensorFlow with GPU Support
+
+1. **Install virtual environment package**:
+   ```bash
+   sudo apt install python3-venv
+   ```
+
+2. **Create a virtual environment**:
+   ```bash
+   python3 -m venv tensorflow-gpu
+   source ~/tensorflow-gpu/bin/activate
+   ```
+
+3. **Install TensorFlow GPU**:
+   ```bash
+   pip install --upgrade pip
+   pip install tensorflow-gpu
+   ```
+4. **Install OpenSlide Dependencies**
+   ```bash
+   sudo apt-get update
+   sudo apt-get install openslide-tools
+   sudo apt-get install python3-openslide
+   sudo apt-get install libopenslide0
+   ```
+
+## Step 7: Install Project Dependencies
+
+1. **Navigate to your project directory** (if not already there):
+   ```bash
+   cd your-repository
+   ```
+
+2. **Install the requirements**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Step 8: Run Data Loading Script or Reproduce DVC Pipeline
+
+1. **Run the data loading script**:
+   ```bash
+   python3 src/stages/data_load.py --config params.yaml
+   ```
+
+   **OR**
+
+2. **Reproduce the DVC pipeline**:
+   ```bash
+   dvc repro
+   ```

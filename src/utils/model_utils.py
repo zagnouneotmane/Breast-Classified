@@ -17,8 +17,3 @@ def build_resnet_model(input_shape, num_classes):
     
     return model
 
-input_shape = (224, 224, 3)  # Adjust based on your patches
-num_classes = 2  # Replace with your number of classes
-
-model = build_resnet_model(input_shape, num_classes)
-#model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])

@@ -5,15 +5,15 @@ stages:
     deps:
     - path: src/stages/data_load.py
       hash: md5
-      md5: 0de7eb199747d0d4a527e51c9c3cfcfd
-      size: 2054
+      md5: 2f5d7d039d8b77a71ca43b6714b917b7
+      size: 2673
     - path: src/utils/dataloader_utils.py
       hash: md5
-      md5: e9b7bc1b44b04aeaea4b45bf2a93738e
-      size: 10074
+      md5: 365855616266e9839898db5f1b2aadac
+      size: 10314
     - path: src/utils/dataset_utils.py
       hash: md5
-      md5: e6d4e53b8c501a1f7928909f85c288ef
+      md5: 8ed10c9089e0a48c62e62d1c79ac0ef5
       size: 5464
     params:
       params.yaml:
@@ -36,12 +36,19 @@ stages:
           BATCH_SIZE: 1
           X_Y_Batch_Path: datapreprocessed
           data_dir: data
+          MIL_PATCH_SIZE:
+          - 224
+          - 224
+          MIL_INFER_BATCH_SIZE: 32
+          MIL_USE_EM: false
+          MIL_K: 1
+          MIL_SKIP_WHITE: true
     outs:
     - path: datapreprocessed/x_batch.joblib
       hash: md5
-      md5: dabb8c354646b1a38e02857e035481b6
-      size: 29128609
+      md5: a7911b1a6756a8ed94d1b3bb7cd93696
+      size: 602353
     - path: datapreprocessed/y_batch.joblib
       hash: md5
-      md5: 7046fff0e1b24979fc9b3965500cca86
+      md5: b2d42563a4208a2a8ac203b4914b312e
       size: 241

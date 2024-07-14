@@ -15,3 +15,8 @@ data_load:
   BATCH_SIZE: 1
   X_Y_Batch_Path: datapreprocessed
   data_dir: data
+  MIL_PATCH_SIZE: [224,224]
+  MIL_INFER_BATCH_SIZE: 32
+  MIL_USE_EM: False
+  MIL_K: 1
+  MIL_SKIP_WHITE: True

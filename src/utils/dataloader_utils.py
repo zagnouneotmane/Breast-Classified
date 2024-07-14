@@ -113,8 +113,8 @@ class WholeSlideDataloader(tf.keras.utils.Sequence):
 class MILDataloader(WholeSlideDataloader):
     MIL_WHITE_THRESHOLD = 220
     MIL_EM_GAUSSIAN_KERNEL_SIZE = 3
-    MIL_EM_P1 = 0.1
-    MIL_EM_P2 = 0.05
+    MIL_EM_P1 = 1
+    MIL_EM_P2 = 30
 
     def __init__(
         self, 
@@ -205,6 +205,9 @@ class MILDataloader(WholeSlideDataloader):
                     0
                 )
 
+                if self.num_classes==2:
+                    res_map_blurred=res_map_blurred.reshape(res_map_blurred.shape[0], res_map_blurred.shape[1], 1)
+                
                 mil_infer_res_blurred = []
                 for i in range(len(mil_infer_res)):
                     coord = coords[i]
@@ -221,6 +224,8 @@ class MILDataloader(WholeSlideDataloader):
 
                     thres_p2 = np.percentile(candidates, 100.0 - self.MIL_EM_P2)
                     thres = np.minimum(thres_p1, thres_p2)
+                    print(thres_p1)
+                    print(thres_p2)
 
                     if select is None:
                         select = mil_infer_res_blurred[:, class_id - 1] > thres

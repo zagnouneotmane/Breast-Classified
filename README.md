@@ -103,7 +103,7 @@ This guide will help you set up an EC2 instance with TensorFlow GPU support, ins
 3. **Install TensorFlow GPU**:
    ```bash
    pip install --upgrade pip
-   pip install tensorflow-gpu
+   pip install tensorflow[and-cuda]
    ```
 4. **Install OpenSlide Dependencies**
    ```bash
@@ -117,7 +117,7 @@ This guide will help you set up an EC2 instance with TensorFlow GPU support, ins
 
 1. **Navigate to your project directory** (if not already there):
    ```bash
-   cd your-repository
+   cd git-repository
    ```
 
 2. **Install the requirements**:
@@ -136,5 +136,131 @@ This guide will help you set up an EC2 instance with TensorFlow GPU support, ins
 
 2. **Reproduce the DVC pipeline**:
    ```bash
+   dvc init
    dvc repro
    ```
+
+# Setup with Terraform Provider Iterative (TPI)
+
+
+## Step 1: Terraform Configuration
+
+1. **Create a Terraform configuration file**:
+   - Create a file named `main.tf` and add the following configuration:
+
+   ```hcl
+   terraform {
+     required_providers {
+       iterative = {
+         source = "iterative/iterative"
+       }
+     }
+   }
+
+   provider "iterative" {}
+
+   resource "iterative_task" "vscode" {
+     #spot = 0  # auto-priced low-cost spot instance
+     timeout = 24 * 60 * 60
+     disk_size = 100
+     machine = "m+t4"
+     image = "ubuntu"
+     permission_set = "arn:aws:iam::175754385727:instance-profile/tpi-vscode-example"
+     # cloud-specific config
+     cloud = "aws"
+     storage {
+       workdir = "./scripts"
+       output = ""
+     }
+     environment = { GITHUB_PAT = "" }
+     script = <<-END
+       #!/bin/bash
+       chmod +x ./*
+       ./add_github_keys.sh
+       cp ./setup-git.sh /usr/local/bin/.
+       apt-get update >> ./apt_update.log && apt-get install -y git build-essential nvtop >> ./apt_install.log
+       systemd-run --no-block --service-type=exec bash -c 'curl https://gist.githubusercontent.com/dacbd/c527d1a214f7118e6d66e52a6abb4c4f/raw/db3cba14dcc4a23fb1b7c7a115563942d4164aaf/nvidia-src-setup.sh | bash'
+       sudo apt install python3-venv >> ./apt_install.log
+       wget https://us.download.nvidia.com/XFree86/Linux-x86_64/550.67/NVIDIA-Linux-x86_64-550.67.run
+       sudo bash NVIDIA-Linux-x86_64-550.67.run
+       wget https://developer.download.nvidia.com/compute/cuda/11.0.2/local_installers/cuda_11.0.2_450.51.05_linux.run
+       sudo sh cuda_11.0.2_450.51.05_linux.run
+       echo 'export PATH=/usr/local/cuda-11.0/bin:$PATH' >> ~/.bashrc
+       echo 'export LD_LIBRARY_PATH=/usr/local/cuda-11.0/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+       source ~/.bashrc
+       wget "https://developer.nvidia.com/downloads/compute/cudnn/secure/8.9.7/local_installers/12.x/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz/"
+       tar -xzvf cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz
+       sudo cp cuda/include/cudnn*.h /usr/local/cuda/include
+       sudo cp cuda/lib64/libcudnn* /usr/local/cuda/lib64
+       sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+       pushd /home/ubuntu
+       sudo --user=ubuntu --preserve-env=GITHUB_PAT setup-git.sh
+       sudo --user=ubuntu git clone https://github.com/iterative/git-repository.git
+       pushd git-repository
+       sudo --user=ubuntu python3 -m venv tensorflow-gpu
+       sudo --user=ubuntu source ~/tensorflow-gpu/bin/activate
+       sudo --user=ubuntu pip install --upgrade pip
+       sudo --user=ubuntu pip install tensorflow-gpu
+       sudo --user=ubuntu apt-get update
+       sudo --user=ubuntu apt-get install openslide-tools
+       sudo --user=ubuntu apt-get install python3-openslide
+       sudo --user=ubuntu apt-get install libopenslide0
+       popd
+       popd
+       echo "***READY***"
+       sleep infinity
+     END
+   }
+
+   output "connect_with" {
+     value = try("code --remote ssh-remote+ubuntu@{ iterative_task.vscode.addresses[0]} /home/ubuntu/your-repository", "")
+   }
+   ```
+
+## Step 2: Initialize and Apply Terraform Configuration
+
+1. **Initialize Terraform**:
+   - In the terminal, navigate to the directory containing `main.tf` and run:
+     ```bash
+     terraform init
+     ```
+
+2. **Apply Terraform Configuration**:
+   - Run the following command to create the resources:
+     ```bash
+     terraform apply
+     ```
+
+   - Type `yes` to confirm the creation of resources.
+
+## Step 3: Install Project Dependencies and Run
+
+1. **SSH into the EC2 instance**:
+   - Use the output command from Terraform to connect via VSCode or SSH:
+     ```bash
+     ssh -i /path/to/your-key-pair.pem ubuntu@your-instance-public-dns
+     ```
+
+2. **Navigate to your project directory**:
+   ```bash
+   cd git-repository
+   ```
+
+3. **Install the requirements**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the data loading script**:
+   ```bash
+   python3 src/stages/data_load.py --config params.yaml
+   ```
+
+   **OR**
+
+5. **Reproduce the DVC pipeline**:
+   ```bash
+   dvc init
+   dvc repro
+   ```
+
